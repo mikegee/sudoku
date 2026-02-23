@@ -43,6 +43,34 @@ const buildPeerLookup = () =>
 
 const PEERS = buildPeerLookup();
 
+const buildUnits = () => {
+  const units = [];
+
+  for (let row = 0; row < GRID_SIDE; row++) {
+    units.push(Array.from({ length: GRID_SIDE }, (_, col) => toIndex(row, col)));
+  }
+
+  for (let col = 0; col < GRID_SIDE; col++) {
+    units.push(Array.from({ length: GRID_SIDE }, (_, row) => toIndex(row, col)));
+  }
+
+  for (let boxRow = 0; boxRow < BOX_SIDE; boxRow++) {
+    for (let boxCol = 0; boxCol < BOX_SIDE; boxCol++) {
+      const cells = [];
+      for (let rowOffset = 0; rowOffset < BOX_SIDE; rowOffset++) {
+        for (let colOffset = 0; colOffset < BOX_SIDE; colOffset++) {
+          cells.push(toIndex(boxRow * BOX_SIDE + rowOffset, boxCol * BOX_SIDE + colOffset));
+        }
+      }
+      units.push(cells);
+    }
+  }
+
+  return units;
+};
+
+const UNITS = buildUnits();
+
 const shuffle = (values) => {
   const copy = [...values];
   for (let index = copy.length - 1; index > 0; index--) {
@@ -200,6 +228,7 @@ const carvePuzzle = (solvedBoard, targetGivens) => {
 
 const countEmptyAfterSinglesCascade = (board) => {
   const working = [...board];
+  const autofilledBySingles = Array(GRID_SIZE).fill(false);
   let changed = true;
 
   while (changed) {
@@ -213,15 +242,22 @@ const countEmptyAfterSinglesCascade = (board) => {
       const candidates = getCellCandidates(working, index);
       if (candidates.length === 1) {
         working[index] = candidates[0];
+        autofilledBySingles[index] = true;
         changed = true;
       }
     }
   }
 
-  return working.filter((value) => value === EMPTY_VALUE).length;
+  const emptyCount = working.filter((value) => value === EMPTY_VALUE).length;
+  const completedUnitByAutoFill = UNITS.some(
+    (unit) => unit.every((index) => working[index] !== EMPTY_VALUE) && unit.some((index) => autofilledBySingles[index]),
+  );
+
+  return { emptyCount, completedUnitByAutoFill };
 };
 
 const boardToGrid = (board) => board.join('');
+const gridToBoard = (grid) => [...grid].map((char) => Number(char));
 
 const generateDefaultGrid = () => {
   let bestGrid = null;
@@ -231,7 +267,11 @@ const generateDefaultGrid = () => {
     const solvedBoard = generateSolvedBoard();
     const puzzleBoard = carvePuzzle(solvedBoard, TARGET_GIVENS);
     const generatedGrid = boardToGrid(puzzleBoard);
-    const emptyAfterSingles = countEmptyAfterSinglesCascade(puzzleBoard);
+    const { emptyCount: emptyAfterSingles, completedUnitByAutoFill } = countEmptyAfterSinglesCascade(puzzleBoard);
+
+    if (completedUnitByAutoFill) {
+      continue;
+    }
 
     if (emptyAfterSingles > bestEmptyAfterSingles) {
       bestEmptyAfterSingles = emptyAfterSingles;
@@ -243,7 +283,26 @@ const generateDefaultGrid = () => {
     }
   }
 
-  return bestGrid ?? FALLBACK_GRID;
+  if (bestGrid) {
+    return bestGrid;
+  }
+
+  const fallbackAnalysis = countEmptyAfterSinglesCascade(gridToBoard(FALLBACK_GRID));
+  if (!fallbackAnalysis.completedUnitByAutoFill) {
+    return FALLBACK_GRID;
+  }
+
+  // Final safeguard: keep trying until we find any board that satisfies the no-completed-unit rule.
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS * 10; attempt++) {
+    const solvedBoard = generateSolvedBoard();
+    const puzzleBoard = carvePuzzle(solvedBoard, TARGET_GIVENS);
+    const analysis = countEmptyAfterSinglesCascade(puzzleBoard);
+    if (!analysis.completedUnitByAutoFill) {
+      return boardToGrid(puzzleBoard);
+    }
+  }
+
+  return FALLBACK_GRID;
 };
 
 export const parseGridToGivens = (grid) => {

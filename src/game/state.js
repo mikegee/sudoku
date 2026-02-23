@@ -13,6 +13,10 @@ import { toCol, toIndex, toRow } from './grid';
 import { getInitialGivens } from './puzzle';
 
 const COMPLETION_MESSAGE = 'Puzzle complete! Nice work.';
+const MESSAGE_TYPES = {
+  ERROR: 'error',
+  SUCCESS: 'success',
+};
 const GIVEN_CELL_EDIT_MESSAGE = 'That is a puzzle cell and cannot be changed.';
 
 const formatAutoFillInvalidMessage = (index, value) =>
@@ -20,6 +24,8 @@ const formatAutoFillInvalidMessage = (index, value) =>
 
 const formatManualInvalidMessage = (value) =>
   `Cannot place ${value} there because it violates Sudoku rules.`;
+const formatNoCandidatesMessage = (index) =>
+  `No candidates remain for row ${toRow(index) + 1}, col ${toCol(index) + 1}. Undo your last move.`;
 
 const findNextForcedSingle = (board, candidates) => {
   for (let index = 0; index < CELL_COUNT; index++) {
@@ -32,6 +38,41 @@ const findNextForcedSingle = (board, candidates) => {
   }
 
   return null;
+};
+
+const findFirstExhaustedCell = (board, candidates) => {
+  for (let index = 0; index < CELL_COUNT; index++) {
+    if (board[index] === EMPTY_VALUE && candidates[index].size === 0) {
+      return index;
+    }
+  }
+
+  return null;
+};
+
+const deriveAutoFillState = (board, candidates, explicitMessage = null, explicitMessageType = null) => {
+  if (explicitMessage) {
+    return {
+      pendingAutoFill: null,
+      statusMessage: explicitMessage,
+      statusMessageType: explicitMessageType ?? MESSAGE_TYPES.ERROR,
+    };
+  }
+
+  const exhaustedIndex = findFirstExhaustedCell(board, candidates);
+  if (exhaustedIndex !== null) {
+    return {
+      pendingAutoFill: null,
+      statusMessage: formatNoCandidatesMessage(exhaustedIndex),
+      statusMessageType: MESSAGE_TYPES.ERROR,
+    };
+  }
+
+  return {
+    pendingAutoFill: findNextForcedSingle(board, candidates),
+    statusMessage: null,
+    statusMessageType: null,
+  };
 };
 
 const isPuzzleComplete = (board, invalidCells) => {
@@ -52,10 +93,29 @@ const isPuzzleComplete = (board, invalidCells) => {
   return true;
 };
 
-const resolveStatus = (board, invalidCells, explicitMessage = null) => {
+const resolveStatus = (board, invalidCells, explicitMessage = null, explicitMessageType = null) => {
   const isComplete = isPuzzleComplete(board, invalidCells);
-  const message = explicitMessage ?? (isComplete ? COMPLETION_MESSAGE : null);
-  return { isComplete, message };
+  if (explicitMessage) {
+    return {
+      isComplete,
+      message: explicitMessage,
+      messageType: explicitMessageType ?? MESSAGE_TYPES.ERROR,
+    };
+  }
+
+  if (isComplete) {
+    return {
+      isComplete,
+      message: COMPLETION_MESSAGE,
+      messageType: MESSAGE_TYPES.SUCCESS,
+    };
+  }
+
+  return {
+    isComplete,
+    message: null,
+    messageType: null,
+  };
 };
 
 const createBoardFromGivens = (givens) => {
@@ -88,13 +148,13 @@ const appendHistorySnapshot = (history, board, candidates, invalidCells, { repla
   return [...history, snapshot];
 };
 
-const buildStateFromSnapshot = (state, snapshot, history, message = null) => ({
+const buildStateFromSnapshot = (state, snapshot, history, message = null, messageType = null) => ({
   board: [...snapshot.board],
   candidates: cloneCandidates(snapshot.candidates),
   givenCells: state.givenCells,
   invalidCells: cloneInvalidCells(snapshot.invalidCells),
   pendingAutoFill: null,
-  ...resolveStatus(snapshot.board, snapshot.invalidCells, message),
+  ...resolveStatus(snapshot.board, snapshot.invalidCells, message, messageType),
   history,
 });
 
@@ -103,18 +163,27 @@ const buildNextState = (
   board,
   candidates,
   invalidCells,
-  { message = null, replaceLastHistoryEntry = false } = {},
-) => ({
-  board,
-  candidates,
-  givenCells: state.givenCells,
-  invalidCells,
-  pendingAutoFill: findNextForcedSingle(board, candidates),
-  ...resolveStatus(board, invalidCells, message),
-  history: appendHistorySnapshot(state.history, board, candidates, invalidCells, {
-    replaceLast: replaceLastHistoryEntry,
-  }),
-});
+  { message = null, messageType = null, replaceLastHistoryEntry = false } = {},
+) => {
+  const { pendingAutoFill, statusMessage, statusMessageType } = deriveAutoFillState(
+    board,
+    candidates,
+    message,
+    messageType,
+  );
+
+  return {
+    board,
+    candidates,
+    givenCells: state.givenCells,
+    invalidCells,
+    pendingAutoFill,
+    ...resolveStatus(board, invalidCells, statusMessage, statusMessageType),
+    history: appendHistorySnapshot(state.history, board, candidates, invalidCells, {
+      replaceLast: replaceLastHistoryEntry,
+    }),
+  };
+};
 
 const createMutableCopies = (state) => ({
   board: [...state.board],
@@ -130,14 +199,15 @@ export const createInitialGameState = ({ forceNewDefault = false } = {}) => {
   const invalidCells = Array(CELL_COUNT).fill(false);
 
   seedCandidatesFromBoard(board, candidates);
+  const { pendingAutoFill, statusMessage, statusMessageType } = deriveAutoFillState(board, candidates);
 
   return {
     board,
     candidates,
     givenCells,
     invalidCells,
-    pendingAutoFill: findNextForcedSingle(board, candidates),
-    ...resolveStatus(board, invalidCells),
+    pendingAutoFill,
+    ...resolveStatus(board, invalidCells, statusMessage, statusMessageType),
     history: [createSnapshot(board, candidates, invalidCells)],
   };
 };
@@ -147,6 +217,7 @@ const rejectInvalidManualFill = (state, value, replaceLastHistoryEntry) => {
     return {
       ...state,
       message: formatManualInvalidMessage(value),
+      messageType: MESSAGE_TYPES.ERROR,
     };
   }
 
@@ -157,6 +228,7 @@ const rejectInvalidManualFill = (state, value, replaceLastHistoryEntry) => {
     snapshotBeforeAttempt,
     historyBeforeAttempt,
     formatManualInvalidMessage(value),
+    MESSAGE_TYPES.ERROR,
   );
 };
 
@@ -172,7 +244,7 @@ const reduceCellValueChange = (state, payload) => {
   const replaceLastHistoryEntry = mergeWithPrevious;
 
   if (state.givenCells[index]) {
-    return { ...state, message: GIVEN_CELL_EDIT_MESSAGE };
+    return { ...state, message: GIVEN_CELL_EDIT_MESSAGE, messageType: MESSAGE_TYPES.ERROR };
   }
 
   if (value > EMPTY_VALUE && !isValidPlacement(state.board, index, value)) {
@@ -228,9 +300,16 @@ const reduceAutoFillStep = (state) => {
     state.candidates[index].has(value);
 
   if (!currentCellStillMatchesPending) {
+    const { pendingAutoFill, statusMessage, statusMessageType } = deriveAutoFillState(
+      state.board,
+      state.candidates,
+      state.message,
+      state.messageType,
+    );
     return {
       ...state,
-      pendingAutoFill: findNextForcedSingle(state.board, state.candidates),
+      pendingAutoFill,
+      ...resolveStatus(state.board, state.invalidCells, statusMessage, statusMessageType),
     };
   }
 
@@ -244,6 +323,7 @@ const reduceAutoFillStep = (state) => {
     return {
       ...buildNextState(state, next.board, next.candidates, next.invalidCells, {
         message: formatAutoFillInvalidMessage(index, value),
+        messageType: MESSAGE_TYPES.ERROR,
         replaceLastHistoryEntry: true,
       }),
       pendingAutoFill: null,

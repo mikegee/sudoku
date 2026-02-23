@@ -330,7 +330,34 @@ test('default generated puzzle loads as playable and incomplete', async ({ page 
 
   await expect(page.locator('.cell.invalid')).toHaveCount(0);
   await expect(page.locator('.status-message')).toHaveCount(0);
-  await expect(page.locator('button', { hasText: 'New Puzzle' })).toHaveCount(0);
+  await expect(page.locator('button', { hasText: 'New Puzzle' })).toBeVisible();
+
+  const filledIndices = await page.$$eval('.cell', (cells) =>
+    cells.map((cell, index) => (cell.querySelector('.cell-value') ? index : -1)).filter((index) => index >= 0),
+  );
+  const filled = new Set(filledIndices);
+  const unitHasAllFilled = (indices) => indices.every((index) => filled.has(index));
+
+  const units = [];
+  for (let row = 0; row < 9; row++) {
+    units.push(Array.from({ length: 9 }, (_, col) => row * 9 + col));
+  }
+  for (let col = 0; col < 9; col++) {
+    units.push(Array.from({ length: 9 }, (_, row) => row * 9 + col));
+  }
+  for (let boxRow = 0; boxRow < 3; boxRow++) {
+    for (let boxCol = 0; boxCol < 3; boxCol++) {
+      const unit = [];
+      for (let rowOffset = 0; rowOffset < 3; rowOffset++) {
+        for (let colOffset = 0; colOffset < 3; colOffset++) {
+          unit.push((boxRow * 3 + rowOffset) * 9 + (boxCol * 3 + colOffset));
+        }
+      }
+      units.push(unit);
+    }
+  }
+
+  expect(units.some(unitHasAllFilled)).toBe(false);
 });
 
 test('rejects invalid manual double-click fill and shows message', async ({ page }) => {
@@ -341,6 +368,7 @@ test('rejects invalid manual double-click fill and shows message', async ({ page
 
   await expect(cellValue(targetCell)).toHaveCount(0);
   await expect(page.locator('.status-message')).toContainText('violates Sudoku rules');
+  await expect(page.locator('.status-message')).toHaveClass(/status-error/);
 });
 
 test('keeps invalid auto-fill, marks cell red, and allows undo', async ({ page }) => {
@@ -363,6 +391,7 @@ test('keeps invalid auto-fill, marks cell red, and allows undo', async ({ page }
 test('shows a completion message when puzzle is solved', async ({ page }) => {
   await page.goto(`http://localhost:5173/?givens=${ONE_MISSING_GRID}&autofillDelayMs=0`);
   await expect(page.locator('.status-message')).toContainText('Puzzle complete');
+  await expect(page.locator('.status-message')).toHaveClass(/status-success/);
   await expect(page.locator('button', { hasText: 'New Puzzle' })).toBeVisible();
 });
 
@@ -404,5 +433,5 @@ test('new puzzle button starts a fresh puzzle after completion', async ({ page }
   const candidateCellCount = await page.locator('.cell .candidates').count();
   expect(givenCount).toBeGreaterThan(0);
   expect(candidateCellCount).toBeGreaterThan(0);
-  await expect(page.locator('button', { hasText: 'New Puzzle' })).toHaveCount(0);
+  await expect(page.locator('button', { hasText: 'New Puzzle' })).toBeVisible();
 });

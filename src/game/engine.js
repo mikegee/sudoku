@@ -37,34 +37,6 @@ export const isValidPlacement = (board, index, value) => {
   return true;
 };
 
-export const applyForcedSingles = (board, candidates, invalidCells) => {
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    for (let index = 0; index < CELL_COUNT; index++) {
-      if (board[index] !== EMPTY_VALUE || candidates[index].size !== 1) {
-        continue;
-      }
-
-      const [value] = candidates[index];
-      if (!isValidPlacement(board, index, value)) {
-        board[index] = value;
-        candidates[index] = new Set([value]);
-        invalidCells[index] = true;
-        return { invalidIndex: index, invalidValue: value };
-      }
-
-      setCellValueAndUpdateCandidates(board, candidates, index, value);
-      invalidCells[index] = false;
-      changed = true;
-    }
-  }
-
-  return { invalidIndex: null, invalidValue: null };
-};
-
 export const createInitialCandidates = () =>
   Array(CELL_COUNT)
     .fill(null)

@@ -7,6 +7,14 @@
   text-align: center;
 }
 
+.board-message-area {
+  min-height: 2.8rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
 .board-container {
   display: flex;
   justify-content: center;
@@ -105,7 +113,7 @@
   font-size: 14px;
   line-height: 1;
   font-weight: 400;
-  background-color: #fff;
+  background-color: transparent;
   cursor: pointer;
   color: #000;
   user-select: none;
@@ -130,7 +138,7 @@
 }
 
 .candidate:hover {
-  background-color: #f9f9f9;
+  background-color: transparent;
 }
 
 .board .cell:hover {
@@ -141,8 +149,22 @@
   background-color: #fff3b2;
 }
 
+.board .cell.mark-blue {
+  background-color: #d7e9ff;
+}
+
+.board .cell.mark-green {
+  background-color: #dbf4da;
+}
+
 .board .cell.highlighted .candidate {
   background-color: transparent;
+}
+
+.board .cell.selected {
+  outline: 2px solid #d40000;
+  outline-offset: -2px;
+  z-index: 2;
 }
 
 .board .cell.invalid {
@@ -201,13 +223,25 @@
 }
 
 .status-message {
-  max-width: 220px;
-  border: 1px solid #c33;
-  background-color: #ffeaea;
-  color: #7f1111;
-  font-size: 0.85rem;
+  max-width: 560px;
+  border: 1px solid #b0b0b0;
+  background-color: #f6f6f6;
+  color: #222;
+  font-size: 0.95rem;
   line-height: 1.35;
   border-radius: 4px;
-  padding: 0.6rem 0.7rem;
-  text-align: left;
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+}
+
+.status-message.status-error {
+  border-color: #c33;
+  background-color: #ffeaea;
+  color: #7f1111;
+}
+
+.status-message.status-success {
+  border-color: #83b18a;
+  background-color: #edf8ef;
+  color: #225c2a;
 }

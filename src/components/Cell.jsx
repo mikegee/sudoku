@@ -6,12 +6,37 @@ const DOUBLE_CLICK_WINDOW_MS = 500;
 const EMPTY_CLICK = { num: null, time: null };
 const EMPTY_PENDING_TOGGLE = { num: null, time: null, timerId: null };
 
-const isRecentClick = (time, now) => time !== null && now - time < DOUBLE_CLICK_WINDOW_MS;
+const isWithinDoubleClickWindow = (time, now) =>
+  time !== null && now - time < DOUBLE_CLICK_WINDOW_MS;
 
-const buildCellClassName = ({ isFilled, isGiven, isInvalid, isHighlighted }) =>
-  `cell${isFilled ? ` filled ${isGiven ? 'filled-given' : 'filled-user'}` : ''}${
-    isHighlighted ? ' highlighted' : ''
-  }${isInvalid ? ' invalid' : ''}`;
+const buildCellClassName = ({
+  isFilled,
+  isGiven,
+  isInvalid,
+  isHighlighted,
+  isSelected,
+  markColor,
+}) => {
+  const classes = ['cell'];
+
+  if (isFilled) {
+    classes.push('filled', isGiven ? 'filled-given' : 'filled-user');
+  }
+  if (isHighlighted) {
+    classes.push('highlighted');
+  }
+  if (isInvalid) {
+    classes.push('invalid');
+  }
+  if (isSelected) {
+    classes.push('selected');
+  }
+  if (markColor) {
+    classes.push(`mark-${markColor}`);
+  }
+
+  return classes.join(' ');
+};
 
 const buildCandidateClassName = (isActive) => `candidate${isActive ? ' active' : ''}`;
 
@@ -22,6 +47,8 @@ function Cell({
   candidates,
   isGiven,
   isInvalid,
+  isSelected,
+  markColor,
   highlightNumber,
   onSetCellValue,
   onToggleCandidate,
@@ -37,6 +64,13 @@ function Cell({
     lastClickRef.current = { ...EMPTY_CLICK };
   }, []);
 
+  const commitPendingToggle = useCallback(
+    (pendingNum) => {
+      onToggleCandidate(row, col, pendingNum);
+    },
+    [col, onToggleCandidate, row],
+  );
+
   const clearPendingToggle = useCallback(
     ({ applyToggle = false } = {}) => {
       const pending = pendingToggleRef.current;
@@ -46,27 +80,27 @@ function Cell({
 
       clearTimeout(pending.timerId);
       if (applyToggle) {
-        onToggleCandidate(row, col, pending.num);
+        commitPendingToggle(pending.num);
       }
 
       pendingToggleRef.current = { ...EMPTY_PENDING_TOGGLE };
     },
-    [col, onToggleCandidate, row],
+    [commitPendingToggle],
   );
 
-  const scheduleRiskyToggle = useCallback(
+  const schedulePendingRiskyToggle = useCallback(
     (num, clickTime) => {
       const timerId = setTimeout(() => {
-        onToggleCandidate(row, col, num);
+        commitPendingToggle(num);
         pendingToggleRef.current = { ...EMPTY_PENDING_TOGGLE };
       }, DOUBLE_CLICK_WINDOW_MS);
 
       pendingToggleRef.current = { num, time: clickTime, timerId };
     },
-    [col, onToggleCandidate, row],
+    [commitPendingToggle],
   );
 
-  const fillFromCandidate = useCallback(
+  const fillCellFromCandidate = useCallback(
     (num, { mergeWithPrevious }) => {
       setSavedCandidates(new Set(candidates));
       onSetCellValue(row, col, num, null, mergeWithPrevious);
@@ -74,14 +108,6 @@ function Cell({
     },
     [candidates, col, onSetCellValue, resetLastClick, row],
   );
-
-  useEffect(() => () => clearPendingToggle(), [clearPendingToggle]);
-
-  useEffect(() => {
-    if (isFilled) {
-      clearPendingToggle();
-    }
-  }, [clearPendingToggle, isFilled]);
 
   const handleCandidateClick = useCallback(
     (num) => {
@@ -93,35 +119,47 @@ function Cell({
       const pending = pendingToggleRef.current;
 
       if (pending.timerId) {
-        const sameDigitSecondClick = pending.num === num && isRecentClick(pending.time, now);
-        if (sameDigitSecondClick) {
+        const isPendingDoubleClick =
+          pending.num === num && isWithinDoubleClickWindow(pending.time, now);
+
+        if (isPendingDoubleClick) {
           clearPendingToggle();
-          fillFromCandidate(num, { mergeWithPrevious: false });
+          fillCellFromCandidate(num, { mergeWithPrevious: false });
           return;
         }
 
-        // Resolve the pending delayed single-click before handling a new intent.
+        // Resolve the older delayed single-click before handling a new intent.
         clearPendingToggle({ applyToggle: true });
         return;
       }
 
-      const isRiskySingleClick = candidates.has(num) && candidates.size === 2;
-      if (isRiskySingleClick) {
-        scheduleRiskyToggle(num, now);
+      if (candidates.has(num) && candidates.size === 2) {
+        schedulePendingRiskyToggle(num, now);
         return;
       }
 
       const lastClick = lastClickRef.current;
-      const isDoubleClick = lastClick.num === num && isRecentClick(lastClick.time, now);
+      const isDoubleClick =
+        lastClick.num === num && isWithinDoubleClickWindow(lastClick.time, now);
+
       if (isDoubleClick) {
-        fillFromCandidate(num, { mergeWithPrevious: true });
+        fillCellFromCandidate(num, { mergeWithPrevious: true });
         return;
       }
 
       onToggleCandidate(row, col, num);
       lastClickRef.current = { num, time: now };
     },
-    [candidates, clearPendingToggle, col, fillFromCandidate, isFilled, onToggleCandidate, row, scheduleRiskyToggle],
+    [
+      candidates,
+      clearPendingToggle,
+      col,
+      fillCellFromCandidate,
+      isFilled,
+      onToggleCandidate,
+      row,
+      schedulePendingRiskyToggle,
+    ],
   );
 
   const handleFilledCellClick = useCallback(() => {
@@ -133,8 +171,25 @@ function Cell({
     setSavedCandidates(null);
   }, [col, isFilled, onSetCellValue, row, savedCandidates]);
 
+  useEffect(() => () => clearPendingToggle(), [clearPendingToggle]);
+
+  useEffect(() => {
+    if (isFilled) {
+      clearPendingToggle();
+    }
+  }, [clearPendingToggle, isFilled]);
+
+  const cellClassName = buildCellClassName({
+    isFilled,
+    isGiven,
+    isInvalid,
+    isHighlighted,
+    isSelected,
+    markColor,
+  });
+
   return (
-    <div className={buildCellClassName({ isFilled, isGiven, isInvalid, isHighlighted })} onClick={handleFilledCellClick}>
+    <div className={cellClassName} onClick={handleFilledCellClick}>
       {isFilled ? (
         <div className="cell-value">{value}</div>
       ) : (
@@ -161,6 +216,8 @@ Cell.propTypes = {
   candidates: PropTypes.instanceOf(Set).isRequired,
   isGiven: PropTypes.bool.isRequired,
   isInvalid: PropTypes.bool.isRequired,
+  isSelected: PropTypes.bool.isRequired,
+  markColor: PropTypes.oneOf(['blue', 'green', null]),
   highlightNumber: PropTypes.number,
   onSetCellValue: PropTypes.func.isRequired,
   onToggleCandidate: PropTypes.func.isRequired,
