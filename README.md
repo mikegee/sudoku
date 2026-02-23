@@ -31,19 +31,16 @@ npm run test:e2e
 
 ## Project Structure
 
-- `src/App.jsx`: top-level board wiring.
-- `src/components/Cell.jsx`: cell interaction model (single click, double click, risky-click guard).
-- `src/components/BoardControls.jsx`: undo, number filter, and status message UI.
-- `src/game/constants.js`: board-size and digit constants.
-- `src/game/actions.js`: reducer action types and creators.
-- `src/game/grid.js`: row/column/box indexing utilities.
-- `src/game/engine.js`: low-level board mutation and validation helpers.
-- `src/game/puzzle.js`: puzzle seeding (query override via `?givens=...` + generated default puzzle).
-- `src/game/state.js`: reducer orchestration (actions, history, invalid messaging, undo flow).
-- `src/App.css`: board and control styling.
-- `src/App.test.jsx`: component-level behavior tests.
-- `e2e.spec.js`: Playwright browser tests.
-
-## Notes
-
-- `sudoku-board/` is a legacy experiment and is not used by the active app.
+- `src/App.jsx`: top-level board wiring (state reducer integration, keyboard navigation/marking, and message display).
+- `src/components/Cell.jsx`: per-cell interaction behavior (single click, double click, risky-click handling).
+- `src/components/BoardControls.jsx`: New Puzzle/Undo controls and number-filter buttons.
+- `src/game/actions.js`: reducer action types and action creators.
+- `src/game/constants.js`: board constants and defaults.
+- `src/game/grid.js`: row/column/box index helpers.
+- `src/game/engine.js`: low-level board/candidate mutation + placement validation helpers.
+- `src/game/puzzle.js`: puzzle generation and query-string givens override (`?givens=...`).
+- `src/game/state.js`: game reducer, history handling, auto-fill flow, and message typing.
+- `src/App.css`: board, controls, and status message styles.
+- `src/App.test.jsx`: component-level interaction tests.
+- `src/game/state.test.js`: focused reducer/unit behavior tests.
+- `e2e.spec.js`: Playwright end-to-end browser tests.
