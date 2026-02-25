@@ -245,3 +245,9 @@
   background-color: #edf8ef;
   color: #225c2a;
 }
+
+.status-message.status-info {
+  border-color: #90abd1;
+  background-color: #edf4ff;
+  color: #1d3f6e;
+}

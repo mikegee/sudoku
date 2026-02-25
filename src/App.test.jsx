@@ -7,6 +7,7 @@ const BOARD_CELL_COUNT = 81;
 const SOLVED_GRID =
   '534678912672195348198342567859761423426853791713924856961537284287419635345286179';
 const ONE_MISSING_GRID = `${SOLVED_GRID.slice(0, 80)}0`;
+const ALL_EMPTY_GRID = '0'.repeat(BOARD_CELL_COUNT);
 const UNIT_TEST_GRID =
   '000000000000000000000000000000000000000000000800030007040000900008000040900040008';
 
@@ -118,6 +119,51 @@ describe('App interactions', () => {
         button.textContent?.includes('New Puzzle'),
       );
       expect(newPuzzleButton).toBeTruthy();
+    });
+
+    unmount();
+    window.history.pushState({}, '', previousUrl);
+  });
+
+  it('analyzes the next move and reports easy naked-single hints', async () => {
+    const previousUrl = window.location.href;
+    window.history.pushState({}, '', `/?givens=${ONE_MISSING_GRID}&autofillDelayMs=999999`);
+
+    const { container, unmount } = render(<App />);
+    const analyzeButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Analyze Next Move'),
+    );
+    expect(analyzeButton).toBeTruthy();
+
+    await click(analyzeButton);
+
+    await waitFor(() => {
+      const message = container.querySelector('.status-message');
+      expect(message).toBeTruthy();
+      expect(message.textContent).toBe('Next move: Easy (Naked Single).');
+    });
+
+    unmount();
+    window.history.pushState({}, '', previousUrl);
+  });
+
+  it('reports when no straightforward move is available', async () => {
+    const previousUrl = window.location.href;
+    window.history.pushState({}, '', `/?givens=${ALL_EMPTY_GRID}&autofillDelayMs=999999`);
+
+    const { container, unmount } = render(<App />);
+    const analyzeButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Analyze Next Move'),
+    );
+    expect(analyzeButton).toBeTruthy();
+
+    await click(analyzeButton);
+
+    await waitFor(() => {
+      const message = container.querySelector('.status-message');
+      expect(message).toBeTruthy();
+      expect(message.textContent).toContain('No straightforward move found yet.');
+      expect(message.classList.contains('status-info')).toBe(true);
     });
 
     unmount();

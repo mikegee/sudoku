@@ -9,6 +9,7 @@ import {
   undoAction,
 } from './game/actions';
 import { AUTO_FILL_DELAY_MS, BOARD_SIDE } from './game/constants';
+import { findNextHint, formatHintMessage } from './game/hints';
 import { createInitialGameState, gameReducer } from './game/state';
 import './App.css';
 
@@ -63,6 +64,8 @@ const moveSelection = (currentIndex, key) => {
 function SudokuBoard() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
   const [highlightNumber, setHighlightNumber] = useState(null);
+  const [analysisMessage, setAnalysisMessage] = useState(null);
+  const [analysisMessageType, setAnalysisMessageType] = useState('info');
   const [selectedCellIndex, setSelectedCellIndex] = useState(0);
   const [cellMarks, setCellMarks] = useState(createEmptyCellMarks);
   const selectedCellIndexRef = useRef(0);
@@ -70,6 +73,11 @@ function SudokuBoard() {
 
   const { board, candidates, givenCells, invalidCells, pendingAutoFill, isComplete, message, messageType, history } =
     state;
+
+  useEffect(() => {
+    setAnalysisMessage(null);
+    setAnalysisMessageType('info');
+  }, [board, candidates]);
 
   useEffect(() => {
     if (!pendingAutoFill) {
@@ -123,6 +131,18 @@ function SudokuBoard() {
     setHighlightNumber((current) => (current === num ? null : num));
   }, []);
 
+  const handleAnalyzeNextMove = useCallback(() => {
+    const hint = findNextHint(board, candidates);
+    if (!hint) {
+      setAnalysisMessage('No straightforward move found yet.');
+      setAnalysisMessageType('info');
+      return;
+    }
+
+    setAnalysisMessage(formatHintMessage(hint));
+    setAnalysisMessageType('info');
+  }, [board, candidates]);
+
   const applyMarkToSelectedCell = useCallback(
     (markColor) => {
       setCellMarks((currentMarks) => {
@@ -170,10 +190,15 @@ function SudokuBoard() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleGlobalKeyDown]);
 
+  const displayedMessage = message ?? analysisMessage;
+  const displayedMessageType = messageType ?? analysisMessageType;
+
   return (
     <>
       <div className="board-message-area">
-        {message && <div className={`status-message status-${messageType ?? 'error'}`}>{message}</div>}
+        {displayedMessage && (
+          <div className={`status-message status-${displayedMessageType}`}>{displayedMessage}</div>
+        )}
       </div>
 
       <div className="board-container">
@@ -200,6 +225,7 @@ function SudokuBoard() {
           canUndo={history.length > 1}
           onUndo={handleUndo}
           onStartNewPuzzle={handleStartNewPuzzle}
+          onAnalyzeNextMove={handleAnalyzeNextMove}
           highlightNumber={highlightNumber}
           onToggleHighlightNumber={handleToggleHighlightNumber}
         />

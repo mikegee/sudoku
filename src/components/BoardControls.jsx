@@ -5,6 +5,7 @@ function BoardControls({
   canUndo,
   onUndo,
   onStartNewPuzzle,
+  onAnalyzeNextMove,
   highlightNumber,
   onToggleHighlightNumber,
 }) {
@@ -15,6 +16,9 @@ function BoardControls({
       </button>
       <button onClick={onUndo} disabled={!canUndo} type="button">
         ↶ Undo
+      </button>
+      <button onClick={onAnalyzeNextMove} type="button">
+        Analyze Next Move
       </button>
       <div className="number-filter">
         {DIGITS.map((num) => (
@@ -36,6 +40,7 @@ BoardControls.propTypes = {
   canUndo: PropTypes.bool.isRequired,
   onUndo: PropTypes.func.isRequired,
   onStartNewPuzzle: PropTypes.func.isRequired,
+  onAnalyzeNextMove: PropTypes.func.isRequired,
   highlightNumber: PropTypes.number,
   onToggleHighlightNumber: PropTypes.func.isRequired,
 };
